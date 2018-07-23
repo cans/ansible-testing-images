@@ -3,8 +3,11 @@
 # When making the Conductor image `ansible-galaxy install -r requirements.yml` is executed
 # using this file. Follow the instructions at http://docs.ansible.com/ansible/galaxy.html
 # to include any roles you want installed prior to running main.yml.
-- src: cans.user-make
-  version: 'v1.1.1'
+- src: cans.directory-make
+  version: 'master'
 
 - src: cans.package-install
-  version: 'v2.0.0'
+  version: 'v2.1.0'
+
+- src: cans.user-make
+  version: 'v1.1.1'
