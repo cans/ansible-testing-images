@@ -1,6 +1,6 @@
 galaxy_info:
   author: Nicolas CANIART
-  description: Basic Debian Image to test Ansible Roles
+  description: Basic Debian Images to test Ansible Roles
 
   # If the issue tracker for your role is not on GitHub, uncomment the
   # next line and provide a value
