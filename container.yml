@@ -12,7 +12,7 @@ settings:
 
   # Set the name of the project. Defaults to basename of the project directory.
   # For built services, concatenated with service name to form the built image name.
-  project_name: ansible-testing2
+  project_name: ansible-testing
 
   # The deployment_output_path is mounted to the Conductor container, and the
   # `run` and `deployment` commands then write generated Ansible playbooks to it.
@@ -52,14 +52,27 @@ services:
   # To use this example, uncomment it and delete the curly braces after services key.
   # You may need to run `docker pull ubuntu:trusty` for this to work.
   base:
-    from: "python:3.6-slim-stretch"
+    command: ['/bin/sh', '-c', 'while true ; do sleep 10 ; done']
+    entrypoint: ['/usr/bin/dumb-init']
+    from: "debian:stretch"
     roles:
+      # Try order roles:
+      # - from least to most likely to be modified (either the role itself or its arguments).
+      # - but respecting dependencies
       - role: "cans.package-install"
+        pkginstall_cache_purge: true
         pkginstall_packages:
-          # - python3.6
           - bash
+          - ca-certificates  # For CircleCI. This limits the image's lifespan (certificates expire).
           - dumb-init
+          - python2.7-minimal
+          - python3.5-minimal
+          - python-pip
+          - python3-pip
+          - python-virtualenv
+          - python3-venv
           - sudo
+      # Role "cans.user-make" require sudo (!? to check)
       - role: "cans.user-make"
         usermake_upload_ssh_key_to_target: false
         usermake_users:
@@ -68,11 +81,63 @@ services:
             passwordless_sudo: true
           - name: "regular"
             sudoer: false
-    entrypoint: /usr/bin/dumb-init
-    # command: gunicorn -w 4 -b 0.0.0.0:4000 helloworld:app
 
-registries: {}
+  ssh:
+    command: ['/usr/sbin/sshd', '-D', '-p', '2222']
+    entrypoint: ['/usr/bin/dumb-init']
+    from: "ansible-testing-base:latest"
+    ports:
+      - 2222:2222
+    roles:
+      - role: "cans.directory-make"
+        dirmake_directories:
+          - path: "/run/sshd"
+            mode: 755
+      - role: "cans.package-install"
+        pkginstall_cache_ttl: 1
+        pkginstall_cache_update: true
+        pkginstall_cache_purge: true
+        pkginstall_packages:
+          - openssh-server
+
+  pgclient:
+    command: ['/bin/sh', '-c', 'while true ; do sleep 10 ; done']
+    entrypoint: ['/usr/bin/dumb-init']
+    from: "ansible-testing-base:latest"
+    roles:
+      - role: "cans.package-install"
+        pkginstall_cache_ttl: 1
+        pkginstall_cache_update: true
+        pkginstall_cache_purge: true
+        pkginstall_packages:
+          - postgresql-client-9.6
+          - python-psycopg2
+          - python3-psycopg2
+
+  pgserver:
+    # command: ['/bin/su', 'postgres', '-c', '/usr/lib/postgresql/9.6/bin/postgres -D /var/lib/postgresql/9.6/main -c config_file=/etc/postgresql/9.6/main/postgresql.conf']
+    command: ['/usr/bin/pg_ctlcluster', '--foreground', '-o', '"-h 0.0.0.0"', '-o', '"-p 5432"', '-o', '"-i"', '9.6', 'main', 'start']
+    entrypoint: ['/usr/bin/dumb-init', ]
+    from: "ansible-testing-pgclient:latest"
+    ports:
+      - 54320:5432
+    roles:
+      - role: "cans.package-install"
+        pkginstall_cache_ttl: 1
+        pkginstall_cache_update: true
+        pkginstall_cache_purge: true
+        pkginstall_packages:
+          - postgresql-9.6
+          # Do we want to add some additional pg extensions ?
+
+
+registries:
+  docker:
+    url: https://index.docker.io/v1/
+    namespace: ncaniart
   # Add optional registries used for deployment. For example:
   #  google:
   #    url: https://gcr.io
   #    namespace: my-cool-project-xxxxxx
+
+# vim: et:sw=2:syntax=yaml:ts=2:
