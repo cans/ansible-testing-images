@@ -1,0 +1,61 @@
+---
+- hosts: localhost
+  gather_facts: false
+
+  name: "Build inventory from container images definition"
+  vars:
+    project_prefix: 'ansible-testing'
+    inventory_defaults:
+      groups:
+        - servers
+
+  pre_tasks:
+    - name: "Read container.yml"
+      include_vars:
+        file: "../container.yml"
+        name: "built_containers"
+
+    - name: "Define inventory from container.yml"
+      set_fact:
+        inventory: "{{ inventory | default([]) + [inventory_defaults | combine({'image': project_prefix + '-' + item.key, 'name': project_prefix|replace('-', '_') + '_' + item.key, 'vars': {'role': item.key, }, 'ports': item.value.ports|default(omit) })] }}"
+      with_dict: "{{ built_containers.services }}"
+
+    - name: "Show defined inventory"
+      debug:
+        var: inventory
+
+  roles:
+    - role: chrismeyersfsu.provision_docker
+      provision_docker_inventory: "{{inventory}}"
+      provision_docker_use_docker_connection: true
+
+  tasks:
+    - name: "Set role on each created host"
+      set_fact:
+        # Somehow just "{{item.vars }}" does not seem to work (must check w. and wo. a new line after `set_fact:`.
+        role: "{{ item.vars['role'] }}"
+      delegate_to: "{{ item.name }}"
+      delegate_facts: true
+      with_items: "{{ inventory }}"
+
+    - name: "Show each inventory piece's facts"
+      debug:
+        msg: "{{ hostvars[item.name] | to_nice_yaml }}"
+      with_items: "{{inventory}}"
+
+
+- import_playbook: ./test.yml
+
+
+- hosts: servers
+  name: "After action clean-up"
+  gather_facts: false
+
+  tasks:
+    - name: "Terminate docker containers"
+      docker_container:
+        name: "{{ inventory_hostname }}"
+        state: absent
+      delegate_to: localhost
+
+# vim: et:sw=2:syntax=yaml:ts=2:

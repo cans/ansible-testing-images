@@ -1,0 +1,38 @@
+---
+- hosts: servers
+  gather_facts: false
+
+  tasks:
+    - name: "Read container.yml"
+      include_vars:
+        file: "../container.yml"
+        name: "built_containers"
+
+    - name: "Show services ports"
+      debug:
+        var: item
+      with_items: "{{ built_containers.services[role].ports|default([]) }}"
+      when: "built_containers.services[role].ports is defined"
+
+    - name: "Show facts"
+      debug:
+        var: hostvars[inventory_hostname]
+
+    - name: "Wait for each host services to be up and running, accessible from within the container"
+      wait_for:
+         # host: "{{ docker_ip }}"
+         port: "{{ (item.split(':')[1]|default(item)).split('/')[0] }}"
+         timeout: 60
+      with_items: "{{ built_containers.services[role].ports|default([]) }}"
+      when: "built_containers.services[role].ports is defined"
+
+    - name: "Wait for each host services to be up and running, accessible from host"
+      wait_for:
+         # host: "{{ docker_ip }}"
+         port: "{{ item.split(':')[0] }}"
+         timeout: 60
+      delegate_to: localhost
+      with_items: "{{ built_containers.services[role].ports|default([]) }}"
+      when: "built_containers.services[role].ports is defined"
+
+# vim: et:sw=4:syntax=python:ts=4:
